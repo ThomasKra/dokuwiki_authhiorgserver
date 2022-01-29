@@ -107,7 +107,7 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
         // 1. Schritt: noch kein gueltiges Token vom HiOrg-Server erhalten
         if(empty($_GET["token"])) { 
             $ziel = $this->addUrlParams($this->ssourl,array("weiter"=> $this->myUrl(array("do"=>"login")), // do=login, damit wir für den 2. Schritt wieder hier landen
-                                                            "getuserinfo"=>"name,vorname,username,email,user_id"));
+                                                            "getuserinfo"=>"name,vorname,username,email,user_id,gruppe"));
             send_redirect($ziel);
         } 
         
@@ -130,13 +130,45 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
 
         // $daten = array("name"=>"Hansi", "vorname"=>"Tester", "username"=>"admin", "email"=>"test@test.de", "user_id"=>"abcde12345", "ov"=>"xxx");
         
+	$log = "\n\n".date(DATE_W3C).': '.json_encode($daten);
+	file_put_contents('./log_'.date("j.n.Y").'.txt', $log, FILE_APPEND);
+
+
         $this->data = array("uid"  => $daten["user_id"],
                             "user" => $this->buildUser($daten["username"],$daten["ov"]),
                             "name" => $this->buildName($daten["vorname"], $daten["name"]),
                             "mail" => $daten["email"],
+                            "groups" => $daten["gruppe"],
                             "token"=> $token);
-        $this->data["grps"] = $this->getGroups($this->data["user"]);
-        
+
+    $str_regex = '/^(1';
+    for ($i = 1; $i <16; $i++)
+    {
+        $str_regex .= '|'.strval(2**$i);
+    }
+    $str_regex .= ')$/';
+
+	$gruppe_id_user =  $this->getConf('group_id_users');
+    
+
+    if (preg_match($str_regex, $gruppe_id_user) < 1) {
+        nice_die('Konfigurationsfehler! Gruppen-ID '.$gruppe_id_user.' ist ungültig! Gruppen-ID darf nur 2^x sein (x zwischen 1 und 16)');
+    }
+
+
+	if( empty($gruppe_id_user) || intval($gruppe_id_user) < 0 || intval($gruppe_id_user) > 16 || !($this->data["groups"] & $gruppe_id_user) ) {
+            nice_die("Benutzer ist nicht Mitglied der Gruppe: ".$gruppe_id_user. "! Benutzergruppensumme: ".$this->data["groups"]);
+        }
+
+        $gruppe_id_admin =  $this->getConf('group_id_users');
+    
+
+        if (preg_match($str_regex, $gruppe_id_admin) < 1) {
+            nice_die('Konfigurationsfehler! Gruppen-ID '.$gruppe_id_admin.' ist ungültig! Gruppen-ID darf nur 2^x sein (x zwischen 1 und 16)');
+        }
+	
+    
+    $this->data["grps"] = $this->getGroups($this->data["user"]);
         return true;
     }
     
@@ -153,33 +185,18 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
         }
         
         $ov = trim($this->getConf("ov"));
+
+        $gruppe_id_admin =  $this->getConf('group_id_users');
+
+        
+        
         
         global $conf;
         $return = array($this->cleanGroup($conf["defaultgroup"]));
-        
-        $groups = array("group1"=>$this->getConf("group1_name"),
-                        "group2"=>$this->getConf("group2_name"),
-                        "admin" =>"admin");
-        
-        foreach($groups as $name => $group) {
-            $users = $this->getConf($name."_users");
-            if(!empty($group) && !empty($users)) {
-                if(!empty($ov)) { // ov automatisch ergänzen, wenn bekannt und nicht genannt
-                    $userary = explode(",",$users);
-                    $users = "";
-                    foreach($userary as $u) {
-                        if(strpos($u,$this->usersepchar)===false) {
-                            $u = $this->buildUser($u, $ov);
-                        }
-                        $users .= "," . $u;
-                    }
-                }
-                if(strpos($users,$user)!==false) {
-                    $return[] = $this->cleanGroup($group);
-                }
-            }
-        }
 
+        if( !(empty($gruppe_id_admin) || intval($gruppe_id_admin) < 0 || intval($gruppe_id_admin) > 16 || !($this->data["groups"] & $gruppe_id_admin)) ) {
+            $return[] = $this->cleanGroup("admin");
+        }
         return $return;
     }
     
