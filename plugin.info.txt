@@ -1,7 +1,7 @@
-base   authhiorgserver
+base   authhiorg
 author Thomas Krause | BRK Rosenheim
 email  t.krause@ugsanel.de
 date   2021-01-29
-name   authhiorgserver plugin
+name   authhiorg plugin
 desc   uses HiOrg-Server as Auth-Provider (SSO)
-url    https://github.com/hiorgserver/dokuwiki_authhiorgserver/archive/master.zip
+url    https://github.com/ThomasKra/dokuwiki_authhiorgserver

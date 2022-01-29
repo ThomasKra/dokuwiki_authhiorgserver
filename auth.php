@@ -1,18 +1,26 @@
 <?php
+
 /**
- * DokuWiki Plugin authhiorgserver (Auth Component)
+ * DokuWiki Plugin authhiorg (Auth Component)
  *
  * @license GPL 2 http://www.gnu.org/licenses/gpl-2.0.html
  * @author  HiOrg Server GmbH <support@hiorg-server.de>
  */
 
 // must be run within Dokuwiki
-if(!defined('DOKU_INC')) {
+if (!defined('DOKU_INC')) {
     die();
 }
 
-class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
-    
+if (!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN', DOKU_INC . 'lib/plugins/');
+require_once(DOKU_PLUGIN . 'action.php');
+
+
+
+
+class auth_plugin_authhiorg extends DokuWiki_Auth_Plugin
+{
+
     private $ssourl = "";
     private $data = array();
     private $triedsilent = false;
@@ -21,7 +29,8 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
     /**
      * Constructor.
      */
-    public function __construct() {
+    public function __construct()
+    {
         parent::__construct(); // for compatibility
 
         $this->cando['addUser']     = false; // can Users be created?
@@ -32,24 +41,24 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
         $this->cando['modMail']     = false; // can emails be changed?
         $this->cando['modGroups']   = false; // can groups be changed?
         $this->cando['getUsers']    = false; // can a (filtered) list of users be retrieved?
-        $this->cando['getUserCount']= false; // can the number of users be retrieved?
+        $this->cando['getUserCount'] = false; // can the number of users be retrieved?
         $this->cando['getGroups']   = false; // can a list of available groups be retrieved?
         $this->cando['logout']      = true; // can the user logout again? (eg. not possible with HTTP auth)
         $this->cando['external']    = true; // does the module do external auth checking?
-        
+
         // $this->loadConfig(); // deprecated seit 2012
 
         $this->ssourl = $this->getConf('ssourl');
         $ov = $this->getConf('ov');
-        if(!empty($ov)) {
-            $this->ssourl = $this->addUrlParams($this->ssourl,array("ov"=>$ov));
+        if (!empty($ov)) {
+            $this->ssourl = $this->addUrlParams($this->ssourl, array("ov" => $ov));
         }
 
         $this->data = array();
-        
+
         $this->triedsilent = (isset($_SESSION[DOKU_COOKIE]['auth']['hiorg']['triedsilent'])
-                              && ($_SESSION[DOKU_COOKIE]['auth']['hiorg']['triedsilent'] == true));
-        
+            && ($_SESSION[DOKU_COOKIE]['auth']['hiorg']['triedsilent'] == true));
+
         $this->success = true;
     }
 
@@ -57,11 +66,12 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
     /**
      * Log off the current user 
      */
-    public function logOff() {
-        $url = $this->addUrlParams($this->ssourl,array("logout"=>1,"token"=>$this->data["token"],"weiter"=> $this->myUrl()));
+    public function logOff()
+    {
+        $url = $this->addUrlParams($this->ssourl, array("logout" => 1, "token" => $this->data["token"], "weiter" => $this->myUrl()));
 
         $this->data = array();
-        $_SESSION[DOKU_COOKIE]['auth']['hiorg'] = array("triedsilent"=>true);
+        $_SESSION[DOKU_COOKIE]['auth']['hiorg'] = array("triedsilent" => true);
 
         send_redirect($url);
     }
@@ -74,156 +84,165 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      * @param   bool    $sticky  Cookie should not expire
      * @return  bool             true on successful auth
      */
-    public function trustExternal($user, $pass, $sticky = false) {
-        
+    public function trustExternal($user, $pass, $sticky = false)
+    {
+
         if ($this->loadUserInfoFromSession()) {
             $this->setGlobalConfig();
             return true;
         }
-        
+
         global $ACT;
-        if($ACT == "login") {
+        if ($ACT == "login") {
             $this->processSSO();
-        
+
             $this->setGlobalConfig();
             $this->saveUserInfoToSession();
-            
-        } elseif(!$this->triedsilent) {
+        } elseif (!$this->triedsilent) {
             $_SESSION[DOKU_COOKIE]['auth']['hiorg']['triedsilent'] = $this->triedsilent = true;
             $this->SSOsilent();
         }
-        
+
         return true;
     }
-    
-    function myUrl($urlParameters = '') {
+
+    static function myUrl($urlParameters = '')
+    {
         // global $ID;  // ist zu diesem Zeitpunkt noch nicht initialisiert
         $ID = getID();
         return wl($ID, $urlParameters, true, '&');
     }
-    
-    function processSSO() {
-        
+
+    function processSSO()
+    {
+
         // 1. Schritt: noch kein gueltiges Token vom HiOrg-Server erhalten
-        if(empty($_GET["token"])) { 
-            $ziel = $this->addUrlParams($this->ssourl,array("weiter"=> $this->myUrl(array("do"=>"login")), // do=login, damit wir für den 2. Schritt wieder hier landen
-                                                            "getuserinfo"=>"name,vorname,username,email,user_id,gruppe"));
+        // Sollte nicht mehr passieren, das über Action_Plugin gelöst
+        if (empty($_GET["token"])) {
+            $ziel = $this->addUrlParams($this->ssourl, array(
+                "weiter" => $this->myUrl(array("do" => "login")), // do=login, damit wir für den 2. Schritt wieder hier landen
+                "getuserinfo" => "name,vorname,username,email,user_id,gruppe"
+            ));
             send_redirect($ziel);
-        } 
-        
+        }
+
         // 2. Schritt: Token vom HiOrg-Server erhalten: jetzt Login ueberpruefen und Nutzerdaten abfragen
         $token = $_GET["token"];
 
-        $url = $this->addUrlParams($this->ssourl,array("token"=>$token));
+        $url = $this->addUrlParams($this->ssourl, array("token" => $token));
         $daten = $this->getUrl($url);
-        
-        if(mb_substr( $daten ,0,2) != "OK") {
+
+        if (mb_substr($daten, 0, 2) != "OK") {
             nice_die("Login beim HiOrg-Server fehlgeschlagen!");
         }
-        $daten = unserialize(base64_decode(mb_substr( $daten , 3)));
+        $daten = unserialize(base64_decode(mb_substr($daten, 3)));
 
         // wenn per Konfig auf eine Organisation festgelegt, Cross-Logins abfangen:
         $ov = $this->getConf('ov');
-        if( !empty($ov) && ($daten["ov"] != $ov) ) {
-            nice_die("Falsches Organisationskuerzel: ".$daten["ov"]. ", erwartet: ".$ov);
+        if (!empty($ov) && ($daten["ov"] != $ov)) {
+            nice_die("Falsches Organisationskuerzel: " . $daten["ov"] . ", erwartet: " . $ov);
         }
 
         // $daten = array("name"=>"Hansi", "vorname"=>"Tester", "username"=>"admin", "email"=>"test@test.de", "user_id"=>"abcde12345", "ov"=>"xxx");
-        
-	$log = "\n\n".date(DATE_W3C).': '.json_encode($daten);
-	file_put_contents('./log_'.date("j.n.Y").'.txt', $log, FILE_APPEND);
+
+        $this->data = array(
+            "uid"  => $daten["user_id"],
+            "user" => $this->buildUser($daten["username"], $daten["ov"]),
+            "name" => $this->buildName($daten["vorname"], $daten["name"]),
+            "mail" => $daten["email"],
+            "groups" => $daten["gruppe"],
+            "token" => $token
+        );
+
+        $str_regex = '/^(1';
+        for ($i = 1; $i < 16; $i++) {
+            $str_regex .= '|' . strval(2 ** $i);
+        }
+        $str_regex .= ')$/';
+
+        $gruppe_id_user =  $this->getConf('group_id_users');
 
 
-        $this->data = array("uid"  => $daten["user_id"],
-                            "user" => $this->buildUser($daten["username"],$daten["ov"]),
-                            "name" => $this->buildName($daten["vorname"], $daten["name"]),
-                            "mail" => $daten["email"],
-                            "groups" => $daten["gruppe"],
-                            "token"=> $token);
-
-    $str_regex = '/^(1';
-    for ($i = 1; $i <16; $i++)
-    {
-        $str_regex .= '|'.strval(2**$i);
-    }
-    $str_regex .= ')$/';
-
-	$gruppe_id_user =  $this->getConf('group_id_users');
-    
-
-    if (preg_match($str_regex, $gruppe_id_user) < 1) {
-        nice_die('Konfigurationsfehler! Gruppen-ID '.$gruppe_id_user.' ist ungültig! Gruppen-ID darf nur 2^x sein (x zwischen 1 und 16)');
-    }
+        if (preg_match($str_regex, $gruppe_id_user) < 1) {
+            nice_die('Konfigurationsfehler! Gruppen-ID ' . $gruppe_id_user . ' ist ungültig! Gruppen-ID darf nur 2^x sein (x zwischen 1 und 16)');
+        }
 
 
-	if( empty($gruppe_id_user) || intval($gruppe_id_user) < 0 || intval($gruppe_id_user) > 16 || !($this->data["groups"] & $gruppe_id_user) ) {
-            nice_die("Benutzer ist nicht Mitglied der Gruppe: ".$gruppe_id_user. "! Benutzergruppensumme: ".$this->data["groups"]);
+        if (empty($gruppe_id_user) || intval($gruppe_id_user) < 0 || intval($gruppe_id_user) > 16 || !($this->data["groups"] & $gruppe_id_user)) {
+            nice_die("Benutzer ist nicht Mitglied der Gruppe: " . $gruppe_id_user . "! Benutzergruppensumme: " . $this->data["groups"]);
         }
 
         $gruppe_id_admin =  $this->getConf('group_id_users');
-    
+
 
         if (preg_match($str_regex, $gruppe_id_admin) < 1) {
-            nice_die('Konfigurationsfehler! Gruppen-ID '.$gruppe_id_admin.' ist ungültig! Gruppen-ID darf nur 2^x sein (x zwischen 1 und 16)');
+            nice_die('Konfigurationsfehler! Gruppen-ID ' . $gruppe_id_admin . ' ist ungültig! Gruppen-ID darf nur 2^x sein (x zwischen 1 und 16)');
         }
-	
-    
-    $this->data["grps"] = $this->getGroups($this->data["user"]);
+
+
+        $this->data["grps"] = $this->getGroups($this->data["user"]);
         return true;
     }
-    
-    function SSOsilent() {
-        $ziel = $this->addUrlParams($this->ssourl, array("weiter"      => $this->myUrl(array("do"=>"login")), // do=login, damit wir für den 2. Schritt wieder hier landen
-                                                         "getuserinfo" => "name,vorname,username,email,user_id",
-                                                         "silent"      => $this->myUrl()));
+
+    function SSOsilent()
+    {
+        $ziel = $this->addUrlParams($this->ssourl, array(
+            "weiter"      => $this->myUrl(array("do" => "login")), // do=login, damit wir für den 2. Schritt wieder hier landen
+            "getuserinfo" => "name,vorname,username,email,user_id",
+            "silent"      => $this->myUrl()
+        ));
         send_redirect($ziel);
     }
-    
-    function getGroups($user) {
-        if(empty($user)) {
+
+    function getGroups($user)
+    {
+        if (empty($user)) {
             return "";
         }
-        
+
         $ov = trim($this->getConf("ov"));
 
         $gruppe_id_admin =  $this->getConf('group_id_users');
 
-        
-        
-        
+
+
+
         global $conf;
         $return = array($this->cleanGroup($conf["defaultgroup"]));
 
-        if( !(empty($gruppe_id_admin) || intval($gruppe_id_admin) < 0 || intval($gruppe_id_admin) > 16 || !($this->data["groups"] & $gruppe_id_admin)) ) {
+        if (!(empty($gruppe_id_admin) || intval($gruppe_id_admin) < 0 || intval($gruppe_id_admin) > 16 || !($this->data["groups"] & $gruppe_id_admin))) {
             $return[] = $this->cleanGroup("admin");
         }
         return $return;
     }
-    
-    function buildUser($user, $ov="") {
-        if(empty($ov)) {
+
+    function buildUser($user, $ov = "")
+    {
+        if (empty($ov)) {
             $ov = trim($this->getConf("ov"));
         }
         return $this->cleanUser($user) . $this->usersepchar . $this->cleanUser($ov);
     }
-    
-    function buildName($vorname, $name) {
+
+    function buildName($vorname, $name)
+    {
         switch ($this->getConf('syncname')) {
             case 'vname':
-                return substr($vorname,0,1).". ".$name;
+                return substr($vorname, 0, 1) . ". " . $name;
             case 'vona':
-                return substr($vorname,0,2).substr($name,0,2);
+                return substr($vorname, 0, 2) . substr($name, 0, 2);
             case 'vn':
-                return substr($vorname,0,1).substr($name,0,1);
+                return substr($vorname, 0, 1) . substr($name, 0, 1);
             default:
-                return $vorname." ".$name;
+                return $vorname . " " . $name;
         }
     }
-    
-    function loadUserInfoFromSession() {
-        if(isset($_SESSION[DOKU_COOKIE]['auth']['hiorg'])) {
+
+    function loadUserInfoFromSession()
+    {
+        if (isset($_SESSION[DOKU_COOKIE]['auth']['hiorg'])) {
             $data = $_SESSION[DOKU_COOKIE]['auth']['hiorg'];
-            if(empty($data) || !is_array($data) || empty($data["token"])) {
+            if (empty($data) || !is_array($data) || empty($data["token"])) {
                 return false;
             } else {
                 $this->data = $data;
@@ -232,16 +251,18 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
         }
         return false;
     }
-    
-    function saveUserInfoToSession() {
-        if(!empty($this->data["token"])) {
+
+    function saveUserInfoToSession()
+    {
+        if (!empty($this->data["token"])) {
             $_SESSION[DOKU_COOKIE]['auth']['hiorg'] = $this->data;
             return true;
         }
         return false;
     }
-    
-    function setGlobalConfig() {
+
+    function setGlobalConfig()
+    {
         global $USERINFO;
         $USERINFO['name'] = $this->data['name'];
         $USERINFO['mail'] = $this->data['mail'];
@@ -252,7 +273,7 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
         $_SESSION[DOKU_COOKIE]['auth']['info'] = $USERINFO;
         return true;
     }
-    
+
     /**
      * Helper: builds URL by adding parameters
      *
@@ -260,65 +281,66 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      * @param   array $params additional parameters
      * @return  string
      */
-    function addUrlParams($url, $params) {
-        if(!is_array($params) || empty($params)) {
+    static function addUrlParams($url, $params)
+    {
+        if (!is_array($params) || empty($params)) {
             return $url;
         }
 
         $parary = array();
-        $p = strpos($url,"?");
-        if($p!==false) {
-            foreach(explode("&",substr($url,$p+1)) as $par) {
-                $q = strpos($par,"=");
-                $parary[substr($par,0,$q)] = substr($par,$q+1);
+        $p = strpos($url, "?");
+        if ($p !== false) {
+            foreach (explode("&", substr($url, $p + 1)) as $par) {
+                $q = strpos($par, "=");
+                $parary[substr($par, 0, $q)] = substr($par, $q + 1);
             }
-            $url = substr($url,0,$p);
+            $url = substr($url, 0, $p);
         }
-        
-        foreach($params as $par => $val) {
+
+        foreach ($params as $par => $val) {
             $parary[rawurlencode($par)] = rawurlencode($val);
         }
-        
+
         $ret = $url;
         $sep = "?";
-        foreach($parary as $par => $val) {
+        foreach ($parary as $par => $val) {
             $ret .= $sep . $par . "=" . $val;
             $sep = "&";
         }
         return $ret;
     }
-    
+
     /**
      * Helper: fetches external URL via GET
      *
      * @param   string $url URL
      * @return  string
      */
-    function getUrl($url) {
+    function getUrl($url)
+    {
         $http = new DokuHTTPClient();
         $daten = $http->get($url);
-        
+
         // Workarounds, o.g. Klasse macht manchmal Probleme:
-        if(empty($daten)) {
-            if(function_exists("curl_init")) {
+        if (empty($daten)) {
+            if (function_exists("curl_init")) {
                 $ch = curl_init($url);
-                curl_setopt($ch,CURLOPT_RETURNTRANSFER,1);
-                curl_setopt($ch,CURLOPT_SSL_VERIFYPEER,false);
+                curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+                curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, false);
                 $daten = curl_exec($ch);
                 curl_close($ch);
-            
             } else {
                 if (!ini_get("allow_url_fopen") && version_compare(phpversion(), "4.3.4", "<=")) {
                     ini_set("allow_url_fopen", "1");
                 }
                 if ($fp = @fopen($url, "r")) {
                     $daten = "";
-                    while (!feof($fp)) $daten.= fread($fp, 1024);
+                    while (!feof($fp)) $daten .= fread($fp, 1024);
                     fclose($fp);
                 }
             }
         }
-        
+
         return $daten;
     }
 
@@ -352,7 +374,7 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      * @return  array list of userinfo (refer getUserData for internal userinfo details)
      */
     //public function retrieveUsers($start = 0, $limit = -1, $filter = null) {
-        // FIXME implement
+    // FIXME implement
     //    return array();
     //}
 
@@ -366,7 +388,7 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      * @return int
      */
     //public function getUserCount($filter = array()) {
-        // FIXME implement
+    // FIXME implement
     //    return 0;
     //}
 
@@ -380,7 +402,7 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      * @return  array
      */
     //public function retrieveGroups($start = 0, $limit = 0) {
-        // FIXME implement
+    // FIXME implement
     //    return array();
     //}
 
@@ -392,7 +414,8 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      *
      * @return bool
      */
-    public function isCaseSensitive() {
+    public function isCaseSensitive()
+    {
         return false;
     }
 
@@ -409,7 +432,8 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      * @return string the cleaned username
      */
 
-    public function cleanUser($user) {
+    public function cleanUser($user)
+    {
         global $conf;
         return cleanID(str_replace(':', $conf['sepchar'], $user));
     }
@@ -427,7 +451,8 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      * @param  string $group groupname
      * @return string the cleaned groupname
      */
-    public function cleanGroup($group) {
+    public function cleanGroup($group)
+    {
         global $conf;
         return cleanID(str_replace(':', $conf['sepchar'], $group));
     }
@@ -457,7 +482,7 @@ class auth_plugin_authhiorgserver extends DokuWiki_Auth_Plugin {
      * @return bool
      */
     //public function useSessionCache($user) {
-      // FIXME implement
+    // FIXME implement
     //}
 }
 

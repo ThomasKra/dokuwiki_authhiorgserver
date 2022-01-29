@@ -1,4 +1,4 @@
-dokuwiki_authhiorgserver
+dokuwiki_authhiorg
 ========================
 
 DokuWiki Plugin: Single-Sign-On mit HiOrg-Server (http://www.hiorg-server.de)
@@ -10,7 +10,7 @@ Anleitung zur Installation
     .../conf/local.php
 
 2.  Installieren Sie das Plugin über den Plugin-Manager, Quell-URL:  
-    https://github.com/hiorgserver/dokuwiki_authhiorgserver/archive/master.zip
+    https://github.com/ThomasKra/dokuwiki_authhiorgserver
 
 3.  Setzen Sie zuerst die Einstellungen des Plugins in Ihrem Wiki unter  
     Admin -> Konfiguration -> Plugins: Auth: SSO mit HiOrg-Server
@@ -27,15 +27,15 @@ HiOrg-Server ein.
 Plugins zu sichern.
 
 5.  Stellen Sie ERST JETZT im Abschnitt "Authentifizierungs-Konfig - 
-Authentifizierungsmechanismus (authtype)" um auf "authhiorgserver" und klicken 
+Authentifizierungsmechanismus (authtype)" um auf "authhiorg" und klicken 
 erneut auf [Speichern].
 
 ----
 All documentation for this plugin can be found at
-https://github.com/hiorgserver/dokuwiki_authhiorgserver
+https://github.com/ThomasKra/dokuwiki_authhiorgserver
 
 If you install this plugin manually, make sure it is installed in
-lib/plugins/authhiorgserver/ - if the folder is called different it
+lib/plugins/authhiorg/ - if the folder is called different it
 will not work!
 
 Please refer to http://www.dokuwiki.org/plugins for additional info
