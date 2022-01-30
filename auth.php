@@ -108,9 +108,7 @@ class auth_plugin_authhiorg extends DokuWiki_Auth_Plugin
 
     static function myUrl($urlParameters = '')
     {
-        // global $ID;  // ist zu diesem Zeitpunkt noch nicht initialisiert
-        $ID = getID();
-        return wl($ID, $urlParameters, true, '&');
+        return wl('', $urlParameters, true, '&');
     }
 
     function processSSO()
@@ -123,7 +121,7 @@ class auth_plugin_authhiorg extends DokuWiki_Auth_Plugin
                 "weiter" => $this->myUrl(array("do" => "login")), // do=login, damit wir für den 2. Schritt wieder hier landen
                 "getuserinfo" => "name,vorname,username,email,user_id,gruppe"
             ));
-            send_redirect($ziel);
+           send_redirect($ziel);
         }
 
         // 2. Schritt: Token vom HiOrg-Server erhalten: jetzt Login ueberpruefen und Nutzerdaten abfragen
